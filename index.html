@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>산미 원두 카페 리뷰 확장판</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .screen { display:none; height:100vh; display:flex; justify-content:center; align-items:center; flex-direction:column; }
+    #loginScreen, #signupScreen { background:#f5f5f5; }
+    #loginScreen h1 { font-size:24px; margin-bottom:30px; }
+    form { display:flex; flex-direction:column; gap:10px; width:280px; }
+    input, button, select { padding:10px; border:1px solid #ccc; border-radius:8px; font-size:14px; }
+    button { background:#22c55e; color:white; cursor:pointer; border:none; }
+    button:hover { background:#16a34a; }
+    #map { height:100vh; }
+    .review-box { margin-top:10px; }
+    .review-item { border-top:1px solid #ddd; padding:4px 0; font-size:13px; }
+    small { color:#666; }
+  </style>
+</head>
+<body>
+  <!-- 로그인 화면 -->
+  <div id="loginScreen" class="screen" style="display:flex;">
+    <h1>나에게 딱맞는 커피를 위해</h1>
+    <form id="loginForm">
+      <input id="loginEmail" type="email" placeholder="이메일" required>
+      <input id="loginPassword" type="password" placeholder="비밀번호" required>
+      <button type="submit">로그인</button>
+    </form>
+    <button id="showSignup" style="margin-top:10px; background:#ccc; color:#333;">회원가입</button>
+    <div id="loginError" style="color:red; font-size:13px; margin-top:8px;"></div>
+  </div>
+
+  <!-- 회원가입 화면 -->
+  <div id="signupScreen" class="screen">
+    <h2>회원가입</h2>
+    <form id="signupForm">
+      <input id="signupEmail" type="email" placeholder="이메일" required>
+      <input id="signupPassword" type="password" placeholder="비밀번호" required>
+      <input id="signupNickname" type="text" placeholder="닉네임 (본명 아님)" required>
+      <select id="signupGender" required>
+        <option value="">성별 선택</option>
+        <option>남성</option>
+        <option>여성</option>
+        <option>기타</option>
+      </select>
+      <input id="signupAge" type="number" placeholder="나이" required>
+      <button type="submit">가입 완료</button>
+    </form>
+    <button id="backToLogin" style="margin-top:10px; background:#ccc; color:#333;">뒤로</button>
+  </div>
+
+  <!-- 지도 화면 -->
+  <div id="mapScreen" class="screen" style="flex-direction:column; align-items:stretch;">
+    <div style="padding:6px; background:#f5f5f5; display:flex; justify-content:space-between; align-items:center;">
+      <span>카페 지도</span>
+      <button id="addCafeBtn" style="background:#3b82f6;">카페 추가</button>
+    </div>
+    <div id="map"></div>
+  </div>
+
+  <script>
+    // 저장소 (localStorage)
+    const users = JSON.parse(localStorage.getItem("users")||"[]");
+    let currentUser = JSON.parse(localStorage.getItem("currentUser")||"null");
+    const reviews = JSON.parse(localStorage.getItem("reviews")||"{}");
+    const cafes = JSON.parse(localStorage.getItem("cafes")||JSON.stringify([
+      {id:"c1", name:"브라이트빈 성수", lat:37.5436, lng:127.0559},
+      {id:"c2", name:"써니컵 연남", lat:37.5613, lng:126.9236},
+      {id:"c3", name:"다크테일 을지로", lat:37.5663, lng:126.9907}
+    ]));
+
+    function saveData(){
+      localStorage.setItem("users", JSON.stringify(users));
+      localStorage.setItem("currentUser", JSON.stringify(currentUser));
+      localStorage.setItem("reviews", JSON.stringify(reviews));
+      localStorage.setItem("cafes", JSON.stringify(cafes));
+    }
+
+    function show(screenId){
+      document.querySelectorAll(".screen").forEach(s=>s.style.display="none");
+      document.getElementById(screenId).style.display="flex";
+    }
+
+    // 로그인
+    document.getElementById("loginForm").addEventListener("submit", e=>{
+      e.preventDefault();
+      const email = loginEmail.value;
+      const pw = loginPassword.value;
+      const user = users.find(u=>u.email===email && u.password===pw);
+      if(user){
+        currentUser = user;
+        saveData();
+        show("mapScreen");
+        initMap();
+      }else{
+        loginError.textContent="이메일/비밀번호가 올바르지 않습니다.";
+      }
+    });
+    document.getElementById("showSignup").onclick=()=>show("signupScreen");
+
+    // 회원가입
+    document.getElementById("signupForm").addEventListener("submit", e=>{
+      e.preventDefault();
+      const newUser = {
+        email: signupEmail.value,
+        password: signupPassword.value,
+        nickname: signupNickname.value,
+        gender: signupGender.value,
+        age: signupAge.value
+      };
+      users.push(newUser);
+      saveData();
+      alert("가입이 완료되었습니다. 로그인 해주세요.");
+      show("loginScreen");
+    });
+    document.getElementById("backToLogin").onclick=()=>show("loginScreen");
+
+    // 지도 초기화
+    let mapInit=false;
+    function initMap(){
+      if(mapInit) return;
+      mapInit=true;
+      const map = L.map('map').setView([37.5665,126.9780],13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+      function openCafePopup(c, marker){
+        const cafeReviews = reviews[c.id]||[];
+        let avg = 0;
+        if(cafeReviews.length>0){
+          avg = cafeReviews.reduce((a,b)=>a+parseInt(b.rating),0)/cafeReviews.length;
+        }
+        let html=`<b>${c.name}</b>`;
+        if(cafeReviews.length>0){
+          html+=`<div>⭐ ${avg.toFixed(1)} (${cafeReviews.length}명)</div>`;
+        }
+        html+=`<div class='review-box'>`;
+        if(cafeReviews.length===0){
+          html+=`<div class='review-item'><small>아직 리뷰 없음</small></div>`;
+        } else {
+          cafeReviews.forEach((r,idx)=>{
+            html+=`<div class='review-item'>⭐ ${r.rating} | ${r.user}<br>${r.text}`;
+            if(currentUser && r.userEmail===currentUser.email){
+              html+=` <button data-edit='${idx}'>수정</button><button data-del='${idx}'>삭제</button>`;
+            }
+            html+=`</div>`;
+          });
+        }
+        if(currentUser){
+          html+=`<hr><div>
+            <label>별점: <select id='ratingSelect'>
+              ${[1,2,3,4,5].map(n=>`<option>${n}</option>`).join("")}
+            </select></label><br>
+            <input id='reviewInput' placeholder='리뷰를 작성하세요'/>
+            <button id='saveReview'>등록</button>
+          </div>`;
+        } else {
+          html+=`<div><small>로그인해야 리뷰 작성 가능</small></div>`;
+        }
+        html+=`</div>`;
+        marker.bindPopup(html).openPopup();
+
+        setTimeout(()=>{
+          const btn=document.getElementById("saveReview");
+          if(btn){
+            btn.onclick=()=>{
+              const text=document.getElementById("reviewInput").value;
+              const rating=document.getElementById("ratingSelect").value;
+              if(!reviews[c.id]) reviews[c.id]=[];
+              reviews[c.id].push({user: currentUser.nickname, userEmail: currentUser.email, rating, text});
+              saveData();
+              marker.closePopup();
+              marker.fire("click");
+            };
+          }
+          document.querySelectorAll("[data-edit]").forEach(b=>{
+            b.onclick=()=>{
+              const idx=b.getAttribute("data-edit");
+              const newText=prompt("리뷰 수정:", reviews[c.id][idx].text);
+              if(newText!==null){
+                reviews[c.id][idx].text=newText;
+                saveData();
+                marker.closePopup(); marker.fire("click");
+              }
+            };
+          });
+          document.querySelectorAll("[data-del]").forEach(b=>{
+            b.onclick=()=>{
+              const idx=b.getAttribute("data-del");
+              if(confirm("리뷰를 삭제하시겠습니까?")){
+                reviews[c.id].splice(idx,1);
+                saveData();
+                marker.closePopup(); marker.fire("click");
+              }
+            };
+          });
+        },100);
+      }
+
+      cafes.forEach(c=>{
+        const marker=L.marker([c.lat,c.lng]).addTo(map);
+        marker.on("click",()=>openCafePopup(c,marker));
+      });
+
+      document.getElementById("addCafeBtn").onclick=()=>{
+        const name=prompt("카페 이름:");
+        if(!name) return;
+        alert("지도에서 위치를 클릭하세요!");
+        const clickHandler=(e)=>{
+          const newCafe={id:"c"+Date.now(), name, lat:e.latlng.lat, lng:e.latlng.lng};
+          cafes.push(newCafe);
+          saveData();
+          const marker=L.marker([newCafe.lat,newCafe.lng]).addTo(map);
+          marker.on("click",()=>openCafePopup(newCafe, marker));
+          map.off("click",clickHandler);
+          alert("카페가 추가되었습니다!");
+        };
+        map.on("click",clickHandler);
+      };
+    }
+
+    if(currentUser){
+      show("mapScreen");
+      initMap();
+    }
+  </script>
+</body>
+</html>
