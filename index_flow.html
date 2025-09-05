@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>산미 원두 카페 — 4단계 프로토타입</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root { --bg:#0b0e13; --panel:#11151e; --muted:#8ea0b6; --accent:#22c55e; --err:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,sans-serif; background:#0b0e13; color:#e5e7eb; }
+    .screen { display:none; min-height:100vh; }
+    .center { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .card { width:min(520px, 92%); background:#121826; border:1px solid #1f2a3a; border-radius:16px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.3); }
+    h1,h2 { margin:0 0 12px; }
+    .title { font-size:24px; font-weight:800; text-align:center; margin-bottom:20px; }
+    .muted { color:var(--muted); font-size:12px; }
+    form { display:flex; flex-direction:column; gap:12px; }
+    input, select, button { padding:12px 12px; border-radius:12px; border:1px solid #2a3443; background:#0f1420; color:#e5e7eb; font-size:14px; }
+    input::placeholder { color:#7f8ea8; }
+    button { background:#133022; border-color:#1f3c2b; cursor:pointer; }
+    button.primary { background:var(--accent); color:#0b111b; border:0; }
+    button.ghost { background:#0f1420; }
+    .row { display:flex; gap:10px; }
+    .row > * { flex:1; }
+    .error { color:var(--err); font-size:12px; margin-top:-6px; }
+    .link { color:#60a5fa; cursor:pointer; text-decoration:underline; font-size:13px; text-align:center; }
+    /* Map */
+    #mapScreen { display:flex; flex-direction:column; min-height:100vh; }
+    #topbar { padding:10px 14px; background:#0e1623; border-bottom:1px solid #1f2a3a; display:flex; align-items:center; justify-content:space-between; }
+    #map { height:calc(100vh - 52px); }
+    /* Modal */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; padding:20px; }
+    .modal { width:min(560px, 96%); background:#121826; border:1px solid #1f2a3a; border-radius:16px; padding:18px; }
+    .review-item { border-top:1px solid #223148; padding:10px 0; }
+    .badge { display:inline-block; font-size:12px; padding:2px 8px; border:1px solid #223148; border-radius:999px; background:#0f1420; color:#cbd5e1; }
+    img.thumb { width:90px; height:90px; object-fit:cover; border-radius:10px; border:1px solid #223148; }
+  </style>
+</head>
+<body>
+  <!-- 1단계: 로그인 -->
+  <section id="loginScreen" class="screen center" style="display:flex;">
+    <div class="card">
+      <div class="title">나에게 딱맞는 커피를 위해</div>
+      <form id="loginForm">
+        <input id="loginUsername" autocomplete="username" placeholder="아이디" required />
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="비밀번호" required />
+        <button class="primary" type="submit">로그인</button>
+      </form>
+      <div style="height:8px"></div>
+      <div class="link" id="gotoSignup">회원가입</div>
+      <div id="loginErr" class="error" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- 2단계: 회원가입 - 접속코드 -->
+  <section id="codeScreen" class="screen center">
+    <div class="card">
+      <h2>회원가입 — 접속 코드</h2>
+      <div class="muted">코드를 입력하면 다음 단계로 진행됩니다.</div>
+      <form id="codeForm">
+        <input id="accessCode" placeholder="접속 코드 (예: choiminji_20021205)" required />
+        <button class="primary" type="submit">다음</button>
+      </form>
+      <div id="codeErr" class="error" style="display:none"></div>
+      <div class="link" id="backToLogin1">← 로그인으로 돌아가기</div>
+    </div>
+  </section>
+
+  <!-- 3단계: 회원정보 입력 -->
+  <section id="infoScreen" class="screen center">
+    <div class="card">
+      <h2>회원정보 입력</h2>
+      <form id="infoForm">
+        <input id="nickname" placeholder="닉네임 (2–20자)" required />
+        <div class="row">
+          <input id="birthday" placeholder="생년월일 (YYYY-MM-DD)" required />
+          <select id="gender" required>
+            <option value="">성별 선택</option>
+            <option>남성</option>
+            <option>여성</option>
+            <option>기타</option>
+          </select>
+        </div>
+        <div class="row">
+          <input id="username" placeholder="아이디 (영문/숫자 4–20자)" required />
+          <input id="password" type="password" placeholder="비밀번호 (8자 이상)" required />
+        </div>
+        <button class="primary" type="submit">지도로 이동</button>
+      </form>
+      <div id="infoErr" class="error" style="display:none"></div>
+      <div class="link" id="backToLogin2">← 로그인으로 돌아가기</div>
+    </div>
+  </section>
+
+  <!-- 4단계: 지도 -->
+  <section id="mapScreen" class="screen">
+    <div id="topbar">
+      <div>카페 지도</div>
+      <div id="whoami" class="badge"></div>
+    </div>
+    <div id="map"></div>
+  </section>
+
+  <!-- 리뷰 모달 -->
+  <div id="reviewModal" class="modal-backdrop">
+    <div class="modal">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div id="rvCafeTitle" style="font-weight:800;">카페 이름</div>
+        <button id="closeReview" class="ghost">닫기</button>
+      </div>
+      <div id="rvCafeMeta" class="muted" style="margin:6px 0 10px;"></div>
+      <div id="rvList"></div>
+      <div style="height:8px;"></div>
+      <div id="rvWriteBox">
+        <div class="row">
+          <select id="rvRating">
+            <option value="5">⭐ 5</option>
+            <option value="4">⭐ 4</option>
+            <option value="3">⭐ 3</option>
+            <option value="2">⭐ 2</option>
+            <option value="1">⭐ 1</option>
+          </select>
+          <input id="rvText" placeholder="리뷰를 입력하세요" />
+          <button id="rvSave" class="primary">등록</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*****************
+     * 데이터 저장소  *
+     *****************/
+    const LS = {
+      users: JSON.parse(localStorage.getItem("users") || "[]"),
+      currentUser: JSON.parse(localStorage.getItem("currentUser") || "null"),
+      invited: JSON.parse(localStorage.getItem("invited") || "false"),
+      reviews: JSON.parse(localStorage.getItem("reviews") || "{}"),
+      cafes: JSON.parse(localStorage.getItem("cafes") || JSON.stringify([
+        {id:"c1", name:"브라이트빈 성수", lat:37.5436, lng:127.0559, acidityLevel:4, photo:"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90'><rect width='100%' height='100%' fill='%23e5e7eb'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='12' fill='%23999'>c1</text></svg>"},
+        {id:"c2", name:"써니컵 연남",     lat:37.5613, lng:126.9236, acidityLevel:3, photo:"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90'><rect width='100%' height='100%' fill='%23e5e7eb'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='12' fill='%23999'>c2</text></svg>"},
+        {id:"c3", name:"다크테일 을지로", lat:37.5663, lng:126.9907, acidityLevel:2, photo:"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90'><rect width='100%' height='100%' fill='%23e5e7eb'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='12' fill='%23999'>c3</text></svg>"}
+      ]),
+    };
+    function persist(){ localStorage.setItem("users", JSON.stringify(LS.users));
+      localStorage.setItem("currentUser", JSON.stringify(LS.currentUser));
+      localStorage.setItem("invited", JSON.stringify(LS.invited));
+      localStorage.setItem("reviews", JSON.stringify(LS.reviews));
+      localStorage.setItem("cafes", JSON.stringify(LS.cafes));
+    }
+
+    /*****************
+     * 화면 전환    *
+     *****************/
+    const screens = ["loginScreen","codeScreen","infoScreen","mapScreen"];
+    function show(id){
+      screens.forEach(s => document.getElementById(s).style.display = (s===id? (s==="mapScreen"?"block":"flex") : "none"));
+    }
+
+    // 시작 상태 결정
+    if (LS.currentUser) {
+      show("mapScreen"); setTimeout(initMap, 0);
+    } else if (LS.invited) {
+      show("infoScreen");
+    } else {
+      show("loginScreen");
+    }
+
+    /*****************
+     * 1단계: 로그인  *
+     *****************/
+    document.getElementById("gotoSignup").onclick = ()=> show("codeScreen");
+    document.getElementById("backToLogin1").onclick = ()=> show("loginScreen");
+    document.getElementById("backToLogin2").onclick = ()=> show("loginScreen");
+
+    document.getElementById("loginForm").addEventListener("submit", e=>{
+      e.preventDefault();
+      const u = document.getElementById("loginUsername").value.trim();
+      const p = document.getElementById("loginPassword").value;
+      const user = LS.users.find(x => x.username===u && x.password===p);
+      const err = document.getElementById("loginErr");
+      if (user) {
+        LS.currentUser = user; persist();
+        show("mapScreen"); initMap();
+      } else {
+        err.textContent = "아이디 또는 비밀번호가 올바르지 않습니다."; err.style.display = "block";
+      }
+    });
+
+    /*****************************
+     * 2단계: 회원가입 — 접속코드 *
+     *****************************/
+    const ACCESS_CODE = "choiminji_20021205";
+    document.getElementById("codeForm").addEventListener("submit", e=>{
+      e.preventDefault();
+      const code = document.getElementById("accessCode").value.trim();
+      const err = document.getElementById("codeErr");
+      if (code === ACCESS_CODE) {
+        LS.invited = true; persist();
+        show("infoScreen");
+      } else {
+        err.textContent = "코드가 올바르지 않습니다."; err.style.display = "block";
+      }
+    });
+
+    /************************
+     * 3단계: 회원정보 입력 *
+     ************************/
+    document.getElementById("infoForm").addEventListener("submit", e=>{
+      e.preventDefault();
+      const nickname = document.getElementById("nickname").value.trim();
+      const birthday = document.getElementById("birthday").value.trim();
+      const gender   = document.getElementById("gender").value;
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+
+      const err = document.getElementById("infoErr");
+      err.style.display="none"; err.textContent="";
+
+      // 간단 유효성
+      if (nickname.length < 2 || nickname.length > 20) return showErr("닉네임은 2–20자여야 합니다.");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return showErr("생년월일은 YYYY-MM-DD 형식입니다.");
+      if (!gender) return showErr("성별을 선택하세요.");
+      if (!/^[a-zA-Z0-9]{4,20}$/.test(username)) return showErr("아이디는 영문/숫자 4–20자입니다.");
+      if (password.length < 8) return showErr("비밀번호는 8자 이상이어야 합니다.");
+      if (LS.users.some(u => u.username === username)) return showErr("이미 사용 중인 아이디입니다.");
+
+      const user = { nickname, birthday, gender, username, password, createdAt: Date.now() };
+      LS.users.push(user); LS.currentUser = user; LS.invited = false; persist();
+      show("mapScreen"); initMap();
+
+      function showErr(msg){ err.textContent = msg; err.style.display = "block"; }
+    });
+
+    /*****************
+     * 4단계: 지도   *
+     *****************/
+    let mapInited = false;
+    function initMap(){
+      if (mapInited) return; mapInited = true;
+      document.getElementById("whoami").textContent = LS.currentUser ? `안녕, ${LS.currentUser.nickname}` : "로그인 필요";
+
+      const map = L.map('map').setView([37.5665,126.9780],13);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap & CARTO', subdomains:'abcd', maxZoom:20
+      }).addTo(map);
+
+      // 마커 + 팝업(정보만)
+      LS.cafes.forEach(c => {
+        const m = L.marker([c.lat, c.lng]).addTo(map);
+        m.on("click", () => openCafePopup(c, m));
+      });
+
+      function openCafePopup(c, marker){
+        const rs = LS.reviews[c.id] || [];
+        const avg = rs.length ? (rs.reduce((a,b)=>a+parseInt(b.rating),0)/rs.length).toFixed(1) : null;
+        const html = `
+          <div style="min-width:220px">
+            <div style="font-weight:800; margin-bottom:4px;">${c.name}</div>
+            <div>${avg?`⭐ ${avg} (${rs.length}명)`:'⭐ 아직 평점 없음'}</div>
+            <div style="margin:4px 0;">산미 강도: ${c.acidityLevel}/5</div>
+            ${c.photo ? `<img class="thumb" src="${c.photo}" alt="카페사진">` : ''}
+            <div style="margin-top:8px;">
+              <button class="ghost" onclick="openReview('${c.id}')">리뷰 보기/쓰기</button>
+            </div>
+          </div>`;
+        marker.bindPopup(html).openPopup();
+      }
+    }
+
+    /*****************
+     * 리뷰 모달     *
+     *****************/
+    const modal = document.getElementById("reviewModal");
+    const rvCafeTitle = document.getElementById("rvCafeTitle");
+    const rvCafeMeta  = document.getElementById("rvCafeMeta");
+    const rvList      = document.getElementById("rvList");
+    const rvRating    = document.getElementById("rvRating");
+    const rvText      = document.getElementById("rvText");
+    document.getElementById("closeReview").onclick = ()=> modal.style.display="none";
+
+    window.openReview = function(cafeId){
+      const cafe = LS.cafes.find(c => c.id===cafeId);
+      const rs = LS.reviews[cafeId] || [];
+      const avg = rs.length ? (rs.reduce((a,b)=>a+parseInt(b.rating),0)/rs.length).toFixed(1) : null;
+
+      rvCafeTitle.textContent = cafe.name;
+      rvCafeMeta.textContent  = `${avg?`⭐ ${avg} (${rs.length}명)`:'⭐ 아직 평점 없음'} · 산미 ${cafe.acidityLevel}/5`;
+      rvList.innerHTML = rs.length ? rs.map(r => (
+        `<div class="review-item">⭐ ${r.rating} | ${r.nickname}<br>${r.text}</div>`
+      )).join("") : `<div class="muted">아직 리뷰가 없습니다.</div>`;
+
+      rvText.value = "";
+      modal.style.display = "flex";
+
+      document.getElementById("rvSave").onclick = ()=>{
+        if (!LS.currentUser) { alert("로그인이 필요합니다."); return; }
+        const rating = parseInt(rvRating.value, 10);
+        const text = rvText.value.trim();
+        if (!text) { alert("리뷰를 입력하세요."); return; }
+        if (!LS.reviews[cafeId]) LS.reviews[cafeId] = [];
+        LS.reviews[cafeId].push({
+          userId: LS.currentUser.username,
+          nickname: LS.currentUser.nickname,
+          rating, text, createdAt: Date.now()
+        });
+        persist();
+        window.openReview(cafeId); // refresh
+      };
+    };
+  </script>
+</body>
+</html>
