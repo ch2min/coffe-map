@@ -39,20 +39,22 @@
   </style>
 </head>
 <body>
-  <!-- 1단계: 로그인 -->
-  <section id="loginScreen" class="screen center" style="display:flex;">
-    <div class="card">
-      <div class="title">나에게 딱맞는 커피를 위해</div>
-      <form id="loginForm">
-        <input id="loginUsername" autocomplete="username" placeholder="아이디" required />
-        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="비밀번호" required />
-        <button class="primary" type="submit">로그인</button>
-      </form>
-      <div style="height:8px"></div>
-      <button id="gotoSignup" class="ghost">회원가입</button>
-      <div id="loginErr" class="error" style="display:none"></div>
-    </div>
-  </section>
+<!-- 1단계: 로그인 -->
+<section id="loginScreen" class="screen center" style="display:flex;">
+  <div class="card">
+    <div class="title">나에게 딱맞는 커피를 위해</div>
+    <form id="loginForm">
+      <input id="loginUsername" autocomplete="username" placeholder="아이디" required />
+      <input id="loginPassword" type="password" autocomplete="current-password" placeholder="비밀번호" required />
+      <button class="primary" type="submit">로그인</button>
+    </form>
+
+    <!-- 회원가입: 폼 '밖' + type="button" 필수 -->
+    <button id="gotoSignup" class="ghost" type="button" style="margin-top:12px;">회원가입</button>
+
+    <div id="loginErr" class="error" style="display:none"></div>
+  </div>
+</section>
 
   <!-- 2단계: 회원가입 - 접속코드 -->
   <section id="codeScreen" class="screen center">
